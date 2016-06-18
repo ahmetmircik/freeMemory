@@ -38,11 +38,12 @@ public class FreeMemory {
                 public void run() {
                     Random random = new Random();
                     while (true) {
-                        final byte[] value = new byte[1024];
+                        byte[] value = new byte[1024];
                         random.nextBytes(value);
+
                         map.put(random.nextInt(), value);
 
-                        if (printMemoryAndBreakLoop(false)) {
+                        if (hasReachedMinFreeHeapPercentage(12)) {
                             break;
                         }
                     }
@@ -59,13 +60,14 @@ public class FreeMemory {
         }
 
         out.print("\n\n\nEnd of run...now we expect to see actual used-memory value\n");
+
         while (true) {
-            printMemoryAndBreakLoop(true);
+            printCurrentMemoryInfo();
             parkNanos(SECONDS.toNanos(5));
         }
     }
 
-    protected static boolean printMemoryAndBreakLoop(boolean printAlways) {
+    static boolean hasReachedMinFreeHeapPercentage(int minFreeHeapPercentage) {
         Runtime runtime = Runtime.getRuntime();
 
         long maxMemory = runtime.maxMemory();
@@ -74,9 +76,9 @@ public class FreeMemory {
         long availableMemory = freeMemory + (maxMemory - totalMemory);
         double freeHeapPercentage = 100D * availableMemory / maxMemory;
 
-        if (printAlways || freeHeapPercentage < 12) {
+        if (freeHeapPercentage < minFreeHeapPercentage) {
             String unit = "M";
-            out.println(format("[done]" + MESSAGE, toMB(maxMemory), unit, toMB(totalMemory), unit, toMB(freeMemory), unit,
+            out.println(format(MESSAGE, toMB(maxMemory), unit, toMB(totalMemory), unit, toMB(freeMemory), unit,
                     toMB(totalMemory - freeMemory), unit, toMB(availableMemory), unit, freeHeapPercentage));
             return true;
         }
@@ -84,7 +86,21 @@ public class FreeMemory {
         return false;
     }
 
-    private static int toMB(long bytes) {
+    static void printCurrentMemoryInfo() {
+        Runtime runtime = Runtime.getRuntime();
+
+        long maxMemory = runtime.maxMemory();
+        long totalMemory = runtime.totalMemory();
+        long freeMemory = runtime.freeMemory();
+        long availableMemory = freeMemory + (maxMemory - totalMemory);
+        double freeHeapPercentage = 100D * availableMemory / maxMemory;
+
+        String unit = "M";
+        out.println(format(MESSAGE, toMB(maxMemory), unit, toMB(totalMemory), unit, toMB(freeMemory), unit,
+                toMB(totalMemory - freeMemory), unit, toMB(availableMemory), unit, freeHeapPercentage));
+    }
+
+    static int toMB(long bytes) {
         return (int) Math.rint(bytes / MB);
     }
 }
