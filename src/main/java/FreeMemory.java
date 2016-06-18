@@ -15,6 +15,21 @@ import static java.util.concurrent.locks.LockSupport.parkNanos;
  * <p>
  * G1: (PASS)
  * java -verbose:gc  -Xms32G -Xmx32G -XX:+UseG1GC -cp target/free-memory-issue-1.0-SNAPSHOT.jar FreeMemory
+ * <p>
+ * <p>
+ * Problematic output :
+ *
+ * runtime.maxMemory=32659M, runtime.totalMemory=32659M, runtime.freeMemory=663M, runtime.usedMemory=31996M, runTime.availableMemory=663M, freeHeapPercentage=2.03
+ * runtime.maxMemory=32659M, runtime.totalMemory=32659M, runtime.freeMemory=663M, runtime.usedMemory=31996M, runTime.availableMemory=663M, freeHeapPercentage=2.03
+ * runtime.maxMemory=32659M, runtime.totalMemory=32659M, runtime.freeMemory=663M, runtime.usedMemory=31996M, runTime.availableMemory=663M, freeHeapPercentage=2.03
+ *
+ * End of run...now we expect to see actual used-memory value
+ * runtime.maxMemory=32659M, runtime.totalMemory=32659M, runtime.freeMemory=30469M, runtime.usedMemory=2190M, runTime.availableMemory=30469M, freeHeapPercentage=93.29
+ * [GC (CMS Initial Mark)  2248585K(33443712K), 0.0049429 secs]
+ * runtime.maxMemory=32659M, runtime.totalMemory=32659M, runtime.freeMemory=30463M, runtime.usedMemory=2195M, runTime.availableMemory=30463M, freeHeapPercentage=93.28
+ * [GC (CMS Final Remark)  2248585K(33443712K), 0.0106258 secs]
+ * [GC (CMS Initial Mark)  2215981K(33443712K), 0.0048871 secs]
+ * runtime.maxMemory=32659M, runtime.totalMemory=32659M, runtime.freeMemory=30495M, runtime.usedMemory=2164M, runTime.availableMemory=30495M, freeHeapPercentage=93.37
  */
 public class FreeMemory {
 
