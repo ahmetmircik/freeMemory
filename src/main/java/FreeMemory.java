@@ -224,10 +224,8 @@ public class FreeMemory {
                         double ratio = memUsed * 100D / maxMemory;
                         if (ratio > 80) {
                             start.set(true);
-                            System.out.println("memUsed = " + memUsed);
                         }
 
-                        System.out.println(format("maxMemory=%d%s, memUsed=%d%s, ratio=%.2f", toMB(maxMemory), "M", toMB(memUsed), "M", ratio));
 
                     }
                 }
