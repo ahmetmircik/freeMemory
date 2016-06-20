@@ -1,4 +1,8 @@
+import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryPoolMXBean;
+import java.lang.management.MemoryUsage;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -18,11 +22,11 @@ import static java.util.concurrent.locks.LockSupport.parkNanos;
  * <p>
  * <p>
  * Problematic output :
- *
+ * <p>
  * runtime.maxMemory=32659M, runtime.totalMemory=32659M, runtime.freeMemory=663M, runtime.usedMemory=31996M, runTime.availableMemory=663M, freeHeapPercentage=2.03
  * runtime.maxMemory=32659M, runtime.totalMemory=32659M, runtime.freeMemory=663M, runtime.usedMemory=31996M, runTime.availableMemory=663M, freeHeapPercentage=2.03
  * runtime.maxMemory=32659M, runtime.totalMemory=32659M, runtime.freeMemory=663M, runtime.usedMemory=31996M, runTime.availableMemory=663M, freeHeapPercentage=2.03
- *
+ * <p>
  * End of run...now we expect to see actual used-memory value
  * runtime.maxMemory=32659M, runtime.totalMemory=32659M, runtime.freeMemory=30469M, runtime.usedMemory=2190M, runTime.availableMemory=30469M, freeHeapPercentage=93.29
  * [GC (CMS Initial Mark)  2248585K(33443712K), 0.0049429 secs]
@@ -35,7 +39,7 @@ public class FreeMemory {
 
     static final int MB = 1024 * 1024;
     static final String MESSAGE = "runtime.maxMemory=%d%s, runtime.totalMemory=%d%s, runtime.freeMemory=%d%s," +
-            " runtime.usedMemory=%d%s, runTime.availableMemory=%d%s, freeHeapPercentage=%.2f";
+            " runtime.usedMemory=%d%s, runTime.availableMemory=%d%s, used=%d%s, freeHeapPercentage=%.2f";
 
     public static void main(String[] args) throws InterruptedException {
         final ConcurrentHashMap map = new ConcurrentHashMap();
@@ -82,6 +86,18 @@ public class FreeMemory {
         }
     }
 
+    private static long getUsed() {
+        long used = 0;
+        List<MemoryPoolMXBean> memoryPoolMXBeans = ManagementFactory.getMemoryPoolMXBeans();
+        for (MemoryPoolMXBean memoryPoolMXBean : memoryPoolMXBeans) {
+            MemoryUsage memoryUsage = memoryPoolMXBean.getUsage();
+            if (memoryUsage != null) {
+                used += memoryUsage.getUsed();
+            }
+        }
+        return used;
+    }
+
     static boolean hasReachedMinFreeHeapPercentage(int minFreeHeapPercentage) {
         Runtime runtime = Runtime.getRuntime();
 
@@ -94,7 +110,7 @@ public class FreeMemory {
         if (freeHeapPercentage < minFreeHeapPercentage) {
             String unit = "M";
             out.println(format(MESSAGE, toMB(maxMemory), unit, toMB(totalMemory), unit, toMB(freeMemory), unit,
-                    toMB(totalMemory - freeMemory), unit, toMB(availableMemory), unit, freeHeapPercentage));
+                    toMB(totalMemory - freeMemory), unit, toMB(availableMemory), unit, toMB(getUsed()), unit, freeHeapPercentage));
             return true;
         }
 
@@ -112,7 +128,7 @@ public class FreeMemory {
 
         String unit = "M";
         out.println(format(MESSAGE, toMB(maxMemory), unit, toMB(totalMemory), unit, toMB(freeMemory), unit,
-                toMB(totalMemory - freeMemory), unit, toMB(availableMemory), unit, freeHeapPercentage));
+                toMB(totalMemory - freeMemory), unit, toMB(availableMemory), unit, toMB(getUsed()), unit, freeHeapPercentage));
     }
 
     static int toMB(long bytes) {
