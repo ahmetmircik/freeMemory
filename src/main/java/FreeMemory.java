@@ -224,6 +224,8 @@ public class FreeMemory {
                             System.out.println("memUsed = " + memUsed);
                         }
 
+                        System.out.println(format("memUsed=%d%s, ratio=%.2f ", toMB(memUsed), ratio));
+
                     }
                 }
             };
