@@ -55,6 +55,8 @@ public class FreeMemory {
             " runtime.usedMemory=%d%s, runTime.availableMemory=%d%s, used=%d%s, freeHeapPercentage=%.2f";
     private static AtomicBoolean start = new AtomicBoolean();
 
+    private static final long MAX = Runtime.getRuntime().maxMemory();
+
     public static void main(String[] args) throws InterruptedException {
         installGCMonitoring();
 
@@ -218,13 +220,14 @@ public class FreeMemory {
                             memUsed += memoryUsage.getUsed();
                         }
 
-                        double ratio = (memUsed / Runtime.getRuntime().maxMemory()) * 100D;
+                        long maxMemory = Runtime.getRuntime().maxMemory();
+                        double ratio = memUsed * 100D / maxMemory;
                         if (ratio > 80) {
                             start.set(true);
                             System.out.println("memUsed = " + memUsed);
                         }
 
-                        System.out.println(format("memUsed=%d%s, ratio=%.2f ", toMB(memUsed), ratio));
+                        System.out.println(format("maxMemory=%d%s, memUsed=%d%s, ratio=%.2f", toMB(maxMemory), "M", toMB(memUsed), "M", ratio));
 
                     }
                 }
