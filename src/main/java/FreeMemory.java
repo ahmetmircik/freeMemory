@@ -1,13 +1,26 @@
+import com.sun.management.GarbageCollectionNotificationInfo;
+
+import javax.management.Notification;
+import javax.management.NotificationEmitter;
+import javax.management.NotificationListener;
+import javax.management.openmbean.CompositeData;
+import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryMXBean;
 import java.lang.management.MemoryPoolMXBean;
+import java.lang.management.MemoryType;
 import java.lang.management.MemoryUsage;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+import static com.sun.management.GarbageCollectionNotificationInfo.GARBAGE_COLLECTION_NOTIFICATION;
 import static java.lang.String.format;
 import static java.lang.System.out;
+import static java.lang.management.MemoryNotificationInfo.MEMORY_COLLECTION_THRESHOLD_EXCEEDED;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.concurrent.locks.LockSupport.parkNanos;
 
@@ -40,8 +53,11 @@ public class FreeMemory {
     static final int MB = 1024 * 1024;
     static final String MESSAGE = "runtime.maxMemory=%d%s, runtime.totalMemory=%d%s, runtime.freeMemory=%d%s," +
             " runtime.usedMemory=%d%s, runTime.availableMemory=%d%s, used=%d%s, freeHeapPercentage=%.2f";
+    private static AtomicBoolean start = new AtomicBoolean();
 
     public static void main(String[] args) throws InterruptedException {
+        installGCMonitoring();
+
         final ConcurrentHashMap map = new ConcurrentHashMap();
 
         Runtime runtime = Runtime.getRuntime();
@@ -88,6 +104,7 @@ public class FreeMemory {
 
     private static long getUsed() {
         long used = 0;
+
         List<MemoryPoolMXBean> memoryPoolMXBeans = ManagementFactory.getMemoryPoolMXBeans();
         for (MemoryPoolMXBean memoryPoolMXBean : memoryPoolMXBeans) {
             MemoryUsage memoryUsage = memoryPoolMXBean.getUsage();
@@ -98,7 +115,46 @@ public class FreeMemory {
         return used;
     }
 
+    static void init() {
+        MemoryPoolMXBean tenuredGenPool = null;
+        for (MemoryPoolMXBean pool :
+                ManagementFactory.getMemoryPoolMXBeans()) {
+            // see http://www.javaspecialists.eu/archive/Issue092.html
+            if (pool.getType() == MemoryType.HEAP && pool.isUsageThresholdSupported()) {
+                tenuredGenPool = pool;
+            }
+        }
+
+        // setting the threshold to 80% usage of the memory
+        long max = tenuredGenPool.getUsage().getMax();
+        System.out.println("max = " + max);
+        tenuredGenPool.setCollectionUsageThreshold((int) Math.floor(max * 0.88));
+        tenuredGenPool.setUsageThreshold((int) Math.floor(tenuredGenPool.getUsage().getMax() * 0.88));
+
+
+        final MemoryPoolMXBean tenuredGenPoolParam = tenuredGenPool;
+        MemoryMXBean mbean = ManagementFactory.getMemoryMXBean();
+        NotificationEmitter emitter = (NotificationEmitter) mbean;
+        emitter.addNotificationListener(new NotificationListener() {
+            public void handleNotification(Notification n, Object hb) {
+                if (MEMORY_COLLECTION_THRESHOLD_EXCEEDED.equals(n.getType())) {
+                    start.set(true);
+
+                    long maxMemory = tenuredGenPoolParam.getUsage().getMax();
+                    long usedMemory = tenuredGenPoolParam.getUsage().getUsed();
+
+                    System.out.println("usedMemory/maxMemory * 100D = " + (usedMemory / maxMemory) * 100D);
+
+                }
+            }
+        }, null, null);
+    }
+
     static boolean hasReachedMinFreeHeapPercentage(int minFreeHeapPercentage) {
+        if (!start.get()) {
+            return false;
+        }
+
         Runtime runtime = Runtime.getRuntime();
 
         long maxMemory = runtime.maxMemory();
@@ -133,5 +189,47 @@ public class FreeMemory {
 
     static int toMB(long bytes) {
         return (int) Math.rint(bytes / MB);
+    }
+
+    public static void installGCMonitoring() {
+        //get all the GarbageCollectorMXBeans - there's one for each heap generation
+        //so probably two - the old generation and young generation
+        List<GarbageCollectorMXBean> gcbeans = java.lang.management.ManagementFactory.getGarbageCollectorMXBeans();
+        //Install a notifcation handler for each bean
+        for (GarbageCollectorMXBean gcbean : gcbeans) {
+            NotificationEmitter emitter = (NotificationEmitter) gcbean;
+            //use an anonymously generated listener for this example
+            // - proper code should really use a named class
+            NotificationListener listener = new NotificationListener() {
+
+                //implement the notifier callback handler
+                @Override
+                public void handleNotification(Notification notification, Object handback) {
+                    //we only handle GARBAGE_COLLECTION_NOTIFICATION notifications here
+                    if (notification.getType().equals(GARBAGE_COLLECTION_NOTIFICATION)) {
+                        //get the information associated with this notification
+                        GarbageCollectionNotificationInfo info = GarbageCollectionNotificationInfo.from((CompositeData) notification.getUserData());
+
+                        //Get the information about each memory space, and pretty print it
+                        Map<String, MemoryUsage> mem = info.getGcInfo().getMemoryUsageAfterGc();
+
+                        long memUsed = 0;
+                        for (MemoryUsage memoryUsage : mem.values()) {
+                            memUsed += memoryUsage.getUsed();
+                        }
+
+                        double ratio = (memUsed / Runtime.getRuntime().maxMemory()) * 100D;
+                        if (ratio > 80) {
+                            start.set(true);
+                            System.out.println("memUsed = " + memUsed);
+                        }
+
+                    }
+                }
+            };
+
+            //Add the listener
+            emitter.addNotificationListener(listener, null, null);
+        }
     }
 }
